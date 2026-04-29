@@ -1,6 +1,6 @@
 import Foundation
 
-enum ProverbsData {
+nonisolated enum ProverbsData {
     static let entries: [String] = [
         "ねこにこばん",                  // 猫に小判
         "ぶたにしんじゅ",                // 豚に真珠

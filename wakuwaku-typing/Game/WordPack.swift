@@ -1,6 +1,6 @@
 import Foundation
 
-struct WordPack: Identifiable, Equatable {
+nonisolated struct WordPack: Identifiable, Equatable, Sendable {
     let id: String
     let jp: String
     let en: String
@@ -22,7 +22,7 @@ struct WordPack: Identifiable, Equatable {
     }
 }
 
-enum WordPacks {
+nonisolated enum WordPacks {
     static let kotowaza = WordPack(
         id: "kotowaza",
         jp: "ことわざ",
