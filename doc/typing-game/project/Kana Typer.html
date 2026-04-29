@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Kana Typer — iPhone Typing Game</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=DotGothic16&family=M+PLUS+1+Code:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; padding: 0; background: #0a0517; font-family: system-ui; overflow: hidden; }
+  * { box-sizing: border-box; }
+</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="flick-keyboard.jsx"></script>
+<script type="text/babel" src="screens.jsx"></script>
+
+<script type="text/babel" data-presets="env,react">
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "theme": "arcade",
+  "duration": 30,
+  "difficulty": "medium"
+}/*EDITMODE-END*/;
+
+// Phone — orchestrates the prototype's screen flow inside an iOS frame
+function Phone({ initialScreen = 'home', themeKey = 'arcade', duration = 30, difficulty = 'medium', label }) {
+  const [screen, setScreen] = React.useState(initialScreen);
+  const [result, setResult] = React.useState(null);
+  const [settings, setSettings] = React.useState({
+    duration, difficulty,
+    bgm: true, sfx: true, haptics: true, scanlines: true,
+  });
+  // Sync incoming tweaks
+  React.useEffect(() => {
+    setSettings(s => ({ ...s, duration, difficulty }));
+  }, [duration, difficulty]);
+
+  const theme = THEMES[themeKey] || THEMES.arcade;
+
+  let content;
+  if (screen === 'home') {
+    content = <HomeScreen theme={theme} onStart={() => setScreen('game')} onScreen={setScreen} />;
+  } else if (screen === 'game') {
+    content = <GameScreen theme={theme} duration={settings.duration} difficulty={settings.difficulty}
+      onEnd={(r) => { setResult(r); setScreen('results'); }} />;
+  } else if (screen === 'results') {
+    content = <ResultsScreen theme={theme} result={result || { wpm: 42, acc: 94, score: 18, combo: 7, time: 30 }}
+      onRetry={() => setScreen('game')} onHome={() => setScreen('home')} />;
+  } else if (screen === 'leaderboard') {
+    content = <LeaderboardScreen theme={theme} onBack={() => setScreen('home')} />;
+  } else if (screen === 'settings') {
+    content = <SettingsScreen theme={theme} onBack={() => setScreen('home')} settings={settings} setSettings={setSettings} />;
+  } else if (screen === 'onboarding') {
+    content = <OnboardingScreen theme={theme} onDone={() => setScreen('home')} />;
+  } else if (screen === 'wordpacks') {
+    content = <WordPackScreen theme={theme} onBack={() => setScreen('home')} />;
+  }
+
+  return (
+    <div data-screen-label={label} style={{ display: 'inline-block' }}>
+      <IOSDevice width={390} height={844} dark>
+        {content}
+      </IOSDevice>
+    </div>
+  );
+}
+
+// Main app
+function App() {
+  const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const [focusedScreen, setFocusedScreen] = React.useState(null);
+
+  // Single interactive prototype mode (when one phone is focused/tweaked)
+  const interactivePhone = (
+    <Phone label="Interactive Prototype"
+      initialScreen="home"
+      themeKey={tweaks.theme}
+      duration={tweaks.duration}
+      difficulty={tweaks.difficulty}
+    />
+  );
+
+  return (
+    <>
+      <DesignCanvas title="カナ・タイパー · KANA TYPER" subtitle="Retro arcade Japanese typing game · iPhone · 3 themes">
+
+        <DCSection id="prototype" title="01 · Interactive Prototype">
+          <DCArtboard id="proto" label="Tap PRESS START — full game flow" width={420} height={874}>
+            <div style={{ padding: 15 }}>{interactivePhone}</div>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="screens" title="02 · All Screens (Arcade theme)">
+          {[
+            ['onboarding', '01 Onboarding'],
+            ['home', '02 Home'],
+            ['wordpacks', '03 Choose Text'],
+            ['game', '04 Gameplay'],
+            ['results', '05 Results'],
+            ['leaderboard', '06 Leaderboard'],
+            ['settings', '07 Settings'],
+          ].map(([s, lbl]) => (
+            <DCArtboard key={s} id={`a-${s}`} label={lbl} width={420} height={874}>
+              <div style={{ padding: 15 }}>
+                <Phone label={lbl} initialScreen={s} themeKey="arcade" duration={tweaks.duration} difficulty={tweaks.difficulty} />
+              </div>
+            </DCArtboard>
+          ))}
+        </DCSection>
+
+        <DCSection id="themes" title="03 · Theme Variations (Home + Gameplay + Results)">
+          {[
+            ['arcade', 'NEON Arcade'],
+            ['matrix', 'MATRIX CRT'],
+            ['sunset', 'SUNSET'],
+          ].flatMap(([t, lbl]) => [
+            <DCArtboard key={`th-${t}-home`} id={`th-${t}-home`} label={`${lbl} · Home`} width={420} height={874}>
+              <div style={{ padding: 15 }}>
+                <Phone label={`${lbl} Home`} initialScreen="home" themeKey={t} duration={tweaks.duration} difficulty={tweaks.difficulty} />
+              </div>
+            </DCArtboard>,
+            <DCArtboard key={`th-${t}-game`} id={`th-${t}-game`} label={`${lbl} · Gameplay`} width={420} height={874}>
+              <div style={{ padding: 15 }}>
+                <Phone label={`${lbl} Game`} initialScreen="game" themeKey={t} duration={tweaks.duration} difficulty={tweaks.difficulty} />
+              </div>
+            </DCArtboard>,
+            <DCArtboard key={`th-${t}-res`} id={`th-${t}-res`} label={`${lbl} · Results`} width={420} height={874}>
+              <div style={{ padding: 15 }}>
+                <Phone label={`${lbl} Results`} initialScreen="results" themeKey={t} duration={tweaks.duration} difficulty={tweaks.difficulty} />
+              </div>
+            </DCArtboard>,
+          ])}
+        </DCSection>
+
+      </DesignCanvas>
+
+      <TweaksPanel title="Tweaks">
+        <TweakSection title="Visual Theme">
+          <TweakRadio
+            value={tweaks.theme}
+            options={[
+              { value: 'arcade', label: 'Neon' },
+              { value: 'matrix', label: 'Matrix' },
+              { value: 'sunset', label: 'Sunset' },
+            ]}
+            onChange={v => setTweak('theme', v)}
+          />
+        </TweakSection>
+        <TweakSection title="Round Duration">
+          <TweakRadio
+            value={tweaks.duration}
+            options={[
+              { value: 15, label: '15s' },
+              { value: 30, label: '30s' },
+              { value: 60, label: '60s' },
+            ]}
+            onChange={v => setTweak('duration', v)}
+          />
+        </TweakSection>
+        <TweakSection title="Difficulty">
+          <TweakRadio
+            value={tweaks.difficulty}
+            options={[
+              { value: 'easy', label: 'Easy' },
+              { value: 'medium', label: 'Med' },
+              { value: 'hard', label: 'Hard' },
+            ]}
+            onChange={v => setTweak('difficulty', v)}
+          />
+        </TweakSection>
+      </TweaksPanel>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
