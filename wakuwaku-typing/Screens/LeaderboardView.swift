@@ -87,6 +87,29 @@ struct LeaderboardView: View {
     var body: some View {
         ScreenChrome(theme: theme, title: "🏆 LEADERBOARD", onBack: onBack) {
             VStack(spacing: 12) {
+                // Game Center リーダーボード表示ボタン
+                if appState.gameCenter.isAuthenticated {
+                    Button {
+                        appState.gameCenter.showLeaderboard()
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "gamecontroller.fill")
+                                .font(.system(size: 12))
+                            Text("GAME CENTER")
+                                .font(AppFont.pixel(10))
+                                .kerning(2)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .foregroundStyle(Color.black)
+                        .background(theme.secondary)
+                        .overlay(Rectangle().stroke(theme.secondary, lineWidth: 2))
+                        .glow(theme.secondary, radius: 8)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 16)
+                }
+
                 tabSwitcher
                 Text(tab == .total ? "累計スコア = ALL GAMES SUMMED" : "ベストスコア = SINGLE BEST RUN")
                     .font(AppFont.pixel(8))

@@ -15,6 +15,7 @@ struct RootView: View {
         .onAppear {
             Haptics.enabled = appState.settings.hapticsOn
             Haptics.prepare()
+            appState.gameCenter.authenticate()
         }
         .onChange(of: appState.settings.hapticsOn) { _, on in
             Haptics.enabled = on

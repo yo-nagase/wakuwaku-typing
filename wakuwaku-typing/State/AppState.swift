@@ -16,6 +16,8 @@ final class AppState {
     var currentScreen: Screen
     var lastResult: GameResult?
 
+    let gameCenter = GameCenterManager()
+
     init() {
         if ProcessInfo.processInfo.environment["WT_RESET"] == "1" {
             Persistence.reset()
@@ -61,6 +63,9 @@ final class AppState {
         bestWpm = max(bestWpm, result.wpm)
         lastResult = result
         save()
+
+        // Game Center にスコアを送信
+        gameCenter.submitScore(score, duration: result.time)
     }
 
     func resetAll() {

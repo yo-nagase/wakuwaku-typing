@@ -164,17 +164,26 @@ struct GameView: View {
                 .kerning(4)
                 .foregroundStyle(theme.textDim)
 
-            HStack(spacing: 0) {
-                Text(viewModel.matcher.done)
-                    .foregroundStyle(theme.correct.opacity(0.6))
-                Text(String(viewModel.matcher.target.dropFirst(viewModel.matcher.done.count)))
-                    .foregroundStyle(theme.text)
-            }
-            .font(AppFont.kana(56))
-            .kerning(4)
-            .glow(theme.primary, radius: 24)
-            .frame(minHeight: 80)
+            Text(attributedTarget)
+                .font(AppFont.kana(38))
+                .multilineTextAlignment(.center)
+                .lineLimit(2)
+                .minimumScaleFactor(0.5)
+                .glow(theme.primary, radius: 24)
+                .frame(minHeight: 60)
         }
+    }
+
+    private var attributedTarget: AttributedString {
+        let done = viewModel.matcher.done
+        let target = viewModel.matcher.target
+        var donePart = AttributedString(done)
+        donePart.foregroundColor = theme.correct.opacity(0.6)
+        var remainPart = AttributedString(String(target.dropFirst(done.count)))
+        remainPart.foregroundColor = theme.text
+        var result = donePart
+        result.append(remainPart)
+        return result
     }
 
     private var progressBar: some View {
