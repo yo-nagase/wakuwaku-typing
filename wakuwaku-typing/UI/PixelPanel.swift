@@ -49,6 +49,8 @@ struct StatBlock: View {
                 .kerning(1)
                 .foregroundStyle(theme.accent)
                 .glow(theme.accent, radius: 8)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 10)
