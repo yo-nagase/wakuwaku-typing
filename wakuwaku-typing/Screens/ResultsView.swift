@@ -4,6 +4,7 @@ struct ResultsView: View {
     let theme: Theme
     let result: GameResult
     let isNewBest: Bool
+    let gameCenter: GameCenterManager
     let onRestart: () -> Void
     let onHome: () -> Void
 
@@ -69,7 +70,10 @@ struct ResultsView: View {
                         PixelButton(theme: theme, small: true, "🏠 HOME", action: onHome)
                     }
                     .padding(.top, 24)
-                    .padding(.bottom, 32)
+
+                    leaderboardSection
+                        .padding(.top, 16)
+                        .padding(.bottom, 32)
                 }
             }
         }
@@ -84,6 +88,31 @@ struct ResultsView: View {
             .frame(width: 110, height: 110)
             .background(Color.black.opacity(0.4))
             .overlay(Rectangle().stroke(rankColor, lineWidth: 5))
+    }
+
+    private var leaderboardID: String {
+        GameCenterManager.LeaderboardID.forDuration(result.time)
+            ?? GameCenterManager.LeaderboardID.bestScore
+    }
+
+    @ViewBuilder
+    private var leaderboardSection: some View {
+        if gameCenter.isAuthenticated {
+            VStack(spacing: 10) {
+                Text("✓ SUBMITTED TO GAME CENTER")
+                    .font(AppFont.pixel(8))
+                    .kerning(2)
+                    .foregroundStyle(theme.textDim)
+                PixelButton(theme: theme, small: true, "🏆 LEADERBOARD") {
+                    gameCenter.showLeaderboard(leaderboardID: leaderboardID)
+                }
+            }
+        } else {
+            Text("⚠ GAME CENTER OFFLINE")
+                .font(AppFont.pixel(8))
+                .kerning(2)
+                .foregroundStyle(theme.textDim)
+        }
     }
 
     private var statsGrid: some View {

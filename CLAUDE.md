@@ -44,6 +44,7 @@ There is **no `NavigationStack`**. [RootView.swift](wakuwaku-typing/App/RootView
 - [AppState](wakuwaku-typing/State/AppState.swift) is the top-level `@Observable @MainActor` store: settings, history, current screen, last result, and the `GameCenterManager`. All mutations route through `updateSettings { ... }` / `recordResult(_:)` which persist automatically via [Persistence](wakuwaku-typing/State/Persistence.swift) (UserDefaults key `kanaTyper.v1`).
 - [GameViewModel](wakuwaku-typing/State/GameViewModel.swift) owns one round: the timer task, stats, particle list, and the `KanaMatcher`. Constructed fresh per game in `GameView.init` — do not try to share or hoist it.
 - Use the `Observation` framework (`@Observable`, `@State`), not `ObservableObject` / `@StateObject`.
+- Score formula and rank thresholds live in [ScoreCalculator](wakuwaku-typing/Game/Score.swift). Always go through `ScoreCalculator.score(wpm:accuracyPercent:combo:)` rather than recomputing inline — `RootView` calls it to detect "new best" before `recordResult`, and `AppState.recordResult` calls it again to persist; both paths must agree.
 
 ### The kana input system (the non-obvious part)
 This is the heart of the game and spans three files. Read them together before changing input behavior:
@@ -53,6 +54,9 @@ This is the heart of the game and spans three files. Read them together before c
 3. [GameView.swift `feed(old:new:)`](wakuwaku-typing/Screens/GameView.swift) — bridges iOS's kana TextField to the matcher. iOS produces three change patterns: append (kana typed), same-length replace (modifier cycled the last char in-buffer), and shrink (backspace, ignored). All three are normalized into single-character calls to `viewModel.handle(_:)`.
 
 [KanaKeyboardModel.swift](wakuwaku-typing/Game/KanaKeyboardModel.swift) describes the visual flick keyboard layout but the app does NOT render its own keyboard — it relies on the system kana keyboard. The model exists for content validation (e.g. ensuring word packs only use reachable kana).
+
+### Word packs
+[WordPacks](wakuwaku-typing/Game/WordPack.swift) declares all packs as static properties. Only `kotowaza` is currently active; `vocab`, `shorttext`, and `katakana` are `isLocked` placeholders rendered as "Coming soon" tiles in [ModesView](wakuwaku-typing/Screens/ModesView.swift). Use `WordPacks.active` to iterate playable packs and `WordPacks.all` to iterate every tile (including locked). To ship a new pack: add a `WordPack(...)` static, append it to `all`, and supply `entries` of fully-formed kana strings (no romaji, no kanji).
 
 ### Theming
 Three themes (`.neon`, `.matrix`, `.sunset`) defined as static properties on [Theme](wakuwaku-typing/UI/Theme.swift). `Theme` is passed explicitly down the view tree as a `let theme: Theme` parameter — it is not in the environment. When adding a screen, follow this convention.

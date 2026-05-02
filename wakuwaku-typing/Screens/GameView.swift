@@ -195,6 +195,7 @@ struct GameView: View {
                     .fill(viewModel.timeRemaining < 10 ? theme.wrong : theme.primary)
                     .frame(width: geo.size.width * max(0, frac))
                     .glow(viewModel.timeRemaining < 10 ? theme.wrong : theme.primary, radius: 8)
+                    .animation(.linear(duration: 1), value: viewModel.timeRemaining)
             }
             .overlay(Rectangle().stroke(theme.textDim, lineWidth: 1))
         }

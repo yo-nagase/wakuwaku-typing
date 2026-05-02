@@ -30,7 +30,13 @@ struct HomeView: View {
 
                 Spacer(minLength: 24)
 
-                PixelMascot(theme: theme, dotSize: 9)
+                SpriteSheetView(
+                    imageName: "typing_coffee_boy_24",
+                    frameSize: CGSize(width: 64, height: 64),
+                    frameCount: 24,
+                    frameDuration: 0.2,
+                    scale: 4
+                )
 
                 Spacer(minLength: 16)
 

@@ -58,6 +58,7 @@ struct RootView: View {
                 theme: theme,
                 result: appState.lastResult ?? GameResult(wpm: 0, acc: 0, combo: 0, words: 0, time: 30, course: "—"),
                 isNewBest: lastResultWasNewBest,
+                gameCenter: appState.gameCenter,
                 onRestart: { appState.currentScreen = .game },
                 onHome: { appState.currentScreen = .home }
             )

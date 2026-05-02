@@ -61,39 +61,31 @@ final class GameCenterManager: NSObject {
 
     func submitScore(_ score: Int, duration: Int) {
         guard isAuthenticated else {
-            print("[GameCenter] Not authenticated – skip submit")
+            print("[GameCenter] Not authenticated – skip submit (score=\(score), duration=\(duration))")
+            return
+        }
+        guard score > 0 else {
+            print("[GameCenter] Skip submit – score is 0 (duration=\(duration))")
             return
         }
 
-        // ベストスコア(総合)
+        var ids: [String] = [LeaderboardID.bestScore]
+        if let durationID = LeaderboardID.forDuration(duration) {
+            ids.append(durationID)
+        }
+        print("[GameCenter] Submitting score=\(score) duration=\(duration)s to \(ids)")
+
         Task {
             do {
                 try await GKLeaderboard.submitScore(
                     score,
                     context: 0,
                     player: GKLocalPlayer.local,
-                    leaderboardIDs: [LeaderboardID.bestScore]
+                    leaderboardIDs: ids
                 )
-                print("[GameCenter] Score \(score) submitted to bestScore")
+                print("[GameCenter] ✓ Submit succeeded: score=\(score) ids=\(ids)")
             } catch {
-                print("[GameCenter] Submit bestScore error: \(error.localizedDescription)")
-            }
-        }
-
-        // 秒数別リーダーボード
-        if let durationID = LeaderboardID.forDuration(duration) {
-            Task {
-                do {
-                    try await GKLeaderboard.submitScore(
-                        score,
-                        context: 0,
-                        player: GKLocalPlayer.local,
-                        leaderboardIDs: [durationID]
-                    )
-                    print("[GameCenter] Score \(score) submitted to \(durationID)")
-                } catch {
-                    print("[GameCenter] Submit \(durationID) error: \(error.localizedDescription)")
-                }
+                print("[GameCenter] ✗ Submit failed: \(error) (score=\(score), ids=\(ids))")
             }
         }
     }
