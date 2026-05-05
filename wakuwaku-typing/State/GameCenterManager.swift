@@ -10,7 +10,7 @@ final class GameCenterManager: NSObject {
         static let bestScore       = "wakuwaku_typing_best_score"
         static let best15s         = "wakuwaku_typing_best_15s"
         static let best30s         = "typing_best_30s"
-        static let best60s         = "wakuwaku_typing_best_60s"
+        static let best60s         = "typing_best_60s"
         static let cumulativeScore = "cumulative_score"
 
         static func forDuration(_ seconds: Int) -> String? {

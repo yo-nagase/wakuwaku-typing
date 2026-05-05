@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct GameView: View {
     let theme: Theme
@@ -9,7 +10,7 @@ struct GameView: View {
     @State private var shakeOffset: CGFloat = 0
     @State private var input = ""
     @State private var prevInput = ""
-    @FocusState private var inputFocused: Bool
+    @State private var inputFocused: Bool = false
 
     init(theme: Theme, settings: AppSettings, onEnd: @escaping (GameResult) -> Void, onExit: @escaping () -> Void) {
         self.theme = theme
@@ -47,14 +48,10 @@ struct GameView: View {
                     .padding(.horizontal, 24)
                     .padding(.bottom, 8)
 
-                TextField("", text: $input)
-                    .focused($inputFocused)
-                    .keyboardType(.default)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                    // .oneTimeCode で IME に「ワンタイムコード入力欄」と伝えると、
-                    // 日本語かな入力の変換候補バーが抑制される。
-                    .textContentType(.oneTimeCode)
+                // 日本語かな入力時の IME 変換候補バーを抑止するため、
+                // UITextField を UIViewRepresentable でラップして
+                // isSecureTextEntry / spellChecking / smart-* 等の抑止オプションを束ねる。
+                KanaInputField(text: $input, isFocused: $inputFocused)
                     .frame(width: 1, height: 1)
                     .opacity(0.01)
                     .onChange(of: input) { old, new in
@@ -325,6 +322,73 @@ private struct MultiplierBadge: View {
                         .foregroundStyle(tierColor)
                 }
             }
+        }
+    }
+}
+
+/// 隠し入力欄。SwiftUI の TextField では細かい IME 挙動を制御できないため
+/// UITextField を直接ラップしている。
+///
+/// 設定:
+///   - autocorrection / spellCheck / smart-* すべて off（予測・自動補正の抑止）
+///   - textContentType = .oneTimeCode（IME に「ワンタイムコード」と伝えて変換候補バーを抑制）
+///   - inputAssistantItem を空にしてアシスタントバーも除去
+///
+/// ⚠️ `isSecureTextEntry = true` を立てるとシステムかなキーボードのフリック入力が
+/// 効かなくなるため使わない。iOS 26.2 では `.oneTimeCode` 単体では変換候補バーが
+/// 完全には消えない場合があるが、フリック入力を壊さない方を優先する。
+///
+/// 入力欄自体は frame(1×1) + opacity(0.01) で見えない状態で配置される前提。
+struct KanaInputField: UIViewRepresentable {
+    @Binding var text: String
+    @Binding var isFocused: Bool
+
+    func makeUIView(context: Context) -> UITextField {
+        let tf = UITextField()
+        tf.delegate = context.coordinator
+        tf.autocorrectionType = .no
+        tf.spellCheckingType = .no
+        tf.smartQuotesType = .no
+        tf.smartDashesType = .no
+        tf.smartInsertDeleteType = .no
+        tf.autocapitalizationType = .none
+        tf.keyboardType = .default
+        tf.textContentType = .oneTimeCode
+        tf.inputAssistantItem.leadingBarButtonGroups = []
+        tf.inputAssistantItem.trailingBarButtonGroups = []
+        tf.addTarget(
+            context.coordinator,
+            action: #selector(Coordinator.editingChanged(_:)),
+            for: .editingChanged
+        )
+        return tf
+    }
+
+    func updateUIView(_ tf: UITextField, context: Context) {
+        if tf.text != text { tf.text = text }
+        if isFocused, !tf.isFirstResponder {
+            tf.becomeFirstResponder()
+        } else if !isFocused, tf.isFirstResponder {
+            tf.resignFirstResponder()
+        }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator(self) }
+
+    final class Coordinator: NSObject, UITextFieldDelegate {
+        var parent: KanaInputField
+        init(_ parent: KanaInputField) { self.parent = parent }
+
+        @objc func editingChanged(_ tf: UITextField) {
+            parent.text = tf.text ?? ""
+        }
+
+        func textFieldDidBeginEditing(_ textField: UITextField) {
+            if !parent.isFocused { parent.isFocused = true }
+        }
+
+        func textFieldDidEndEditing(_ textField: UITextField) {
+            if parent.isFocused { parent.isFocused = false }
         }
     }
 }
