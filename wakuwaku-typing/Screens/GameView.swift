@@ -33,24 +33,13 @@ struct GameView: View {
                 progressBar
                     .padding(.bottom, 8)
 
-                Text("★ COMBO ×\(max(viewModel.stats.combo, 3))")
-                    .font(AppFont.pixel(14))
-                    .kerning(2)
-                    .foregroundStyle(theme.accent)
-                    .glow(theme.accent, radius: 12)
-                    .opacity(viewModel.stats.combo >= 3 ? 1 : 0)
-                    .padding(.bottom, 4)
-
                 Spacer()
 
                 wordDisplay
                     .padding(.horizontal, 24)
 
-                Text("WORDS·\(viewModel.stats.words)  ·  COMBO·\(viewModel.stats.combo)/\(viewModel.stats.maxCombo)")
-                    .font(AppFont.pixel(9))
-                    .kerning(2)
-                    .foregroundStyle(theme.textDim)
-                    .padding(.top, 12)
+                MultiplierBadge(theme: theme, combo: viewModel.stats.combo)
+                    .padding(.top, 16)
 
                 Spacer()
 
@@ -242,6 +231,98 @@ struct ParticleLayer: View {
                         .font(AppFont.pixel(18 * scale))
                         .foregroundStyle(color.opacity(alpha))
                     ctx.draw(text, at: CGPoint(x: x, y: y), anchor: .center)
+                }
+            }
+        }
+    }
+}
+
+private struct MultiplierBadge: View {
+    let theme: Theme
+    let combo: Int
+
+    @State private var pulseScale: CGFloat = 1.0
+
+    private var multiplier: Int { ScoreCalculator.multiplier(forCombo: combo) }
+    private var tierStart: Int { ScoreCalculator.currentTierStart(forCombo: combo) }
+    private var nextThreshold: Int? { ScoreCalculator.nextThreshold(forCombo: combo) }
+
+    /// 階層が上がるごとに緑 → 赤へ移行する。
+    private var tierColor: Color {
+        switch multiplier {
+        case 1:  return Color(hex: "39ff14") // green
+        case 2:  return Color(hex: "aaff00") // yellow-green
+        case 3:  return Color(hex: "ffd60a") // yellow
+        case 4:  return Color(hex: "ff9500") // orange
+        case 5:  return Color(hex: "ff4d00") // deep orange
+        default: return Color(hex: "ff1a1a") // red (6x+)
+        }
+    }
+
+    /// バーの総セグメント数 = 現階層の幅（次閾値まで何文字あるか）。
+    /// 最高層は次がないので 5 個固定で全点灯表示。
+    private var totalSegments: Int {
+        if let next = nextThreshold {
+            return max(1, next - tierStart)
+        }
+        return 5
+    }
+
+    /// 現在何個塗られているか（左から順に塗られていく）。最高層では全点灯。
+    private var filledSegments: Int {
+        guard nextThreshold != nil else { return totalSegments }
+        return max(0, min(totalSegments, combo - tierStart))
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 10) {
+                Text("MULT")
+                    .font(AppFont.pixel(10))
+                    .kerning(2)
+                    .foregroundStyle(theme.textDim)
+                Text("x\(multiplier)")
+                    .font(AppFont.pixel(20))
+                    .foregroundStyle(tierColor)
+                    .glow(tierColor, radius: 6)
+                    .scaleEffect(pulseScale)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .overlay(Rectangle().stroke(tierColor, lineWidth: 2))
+            .onChange(of: multiplier) { old, new in
+                guard new > old else { return }
+                pulseScale = 1.0
+                withAnimation(.spring(response: 0.18, dampingFraction: 0.45)) {
+                    pulseScale = 1.7
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.55)) {
+                        pulseScale = 1.0
+                    }
+                }
+            }
+
+            HStack(spacing: 10) {
+                HStack(spacing: 3) {
+                    ForEach(0..<totalSegments, id: \.self) { i in
+                        Rectangle()
+                            .fill(i < filledSegments ? tierColor : theme.textDim.opacity(0.3))
+                            .frame(width: 10, height: 6)
+                    }
+                }
+                .glow(tierColor, radius: 4)
+
+                if let next = nextThreshold {
+                    Text("NEXT \(max(next - combo, 0))")
+                        .font(AppFont.pixel(8))
+                        .kerning(2)
+                        .foregroundStyle(theme.textDim)
+                } else {
+                    Text("MAX")
+                        .font(AppFont.pixel(8))
+                        .kerning(2)
+                        .foregroundStyle(tierColor)
                 }
             }
         }

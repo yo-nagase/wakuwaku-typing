@@ -138,12 +138,15 @@ final class GameViewModel {
     }
 
     private func spawnParticles(forCombo combo: Int, isComplete: Bool) {
-        let count: Int = isComplete
-            ? 20 + min(combo, 30)
-            : 8 + min(combo, 16)
-        let velocityScale = 1.0 + Double(min(combo, 20)) / 40.0
+        let multiplier = ScoreCalculator.multiplier(forCombo: combo)
+        // 倍率が上がるほど派手に。x1 はほとんど出ない (1 粒)。
+        // 1 文字あたり: x1=1, x2=4, x3=7, x4=10, x5=13, x6=16
+        // 単語完了時: 上記 + 8 のボーナス (x1=9, … x6=24)
+        let perCharCount = max(1, (multiplier - 1) * 3 + 1)
+        let count = isComplete ? perCharCount + 8 : perCharCount
+        let velocityScale = 0.8 + Double(multiplier) * 0.15
         let baseChars: [Character] = ["Z", "X", "*", "+", "·"]
-        let chars: [Character] = combo >= 20
+        let chars: [Character] = multiplier >= 4
             ? baseChars + ["★", "♥", "◆"]
             : baseChars
         let now = Date()
@@ -156,15 +159,15 @@ final class GameViewModel {
                 velocityX: Double.random(in: -2.5...2.5) * velocityScale,
                 velocityY: Double.random(in: -3.5 ... -1.5) * velocityScale,
                 char: chars.randomElement() ?? "*",
-                color: pickParticleColor(forCombo: combo)
+                color: pickParticleColor(forMultiplier: multiplier)
             ))
         }
         particles.removeAll { now.timeIntervalSince($0.createdAt) > $0.lifetime + 0.5 }
     }
 
-    private func pickParticleColor(forCombo combo: Int) -> ParticleColor {
-        // combo<10: 等確率 / combo≥10: accent 寄り (60%) / combo≥20: accent 重視 (75%)
-        let accentBias: Double = combo >= 20 ? 0.75 : (combo >= 10 ? 0.60 : 1.0/3.0)
+    private func pickParticleColor(forMultiplier multiplier: Int) -> ParticleColor {
+        // x1–x2: 等確率 / x3–x4: accent 寄り (60%) / x5+: accent 重視 (75%)
+        let accentBias: Double = multiplier >= 5 ? 0.75 : (multiplier >= 3 ? 0.60 : 1.0/3.0)
         if Double.random(in: 0..<1) < accentBias {
             return .accent
         }

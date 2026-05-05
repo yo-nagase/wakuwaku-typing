@@ -9,15 +9,45 @@ enum Rank: String {
 }
 
 enum ScoreCalculator {
-    /// 正答1文字あたりの獲得点。`combo` はインクリメント後の値（最初の正答で 1）。
-    /// 段階表: 0–4 → 1pt / 5–9 → 2pt / 10–19 → 3pt / 20–29 → 4pt / 30+ → 5pt。
+    /// 正答1文字あたりの獲得点（= 倍率）。`combo` はインクリメント後の値（最初の正答で 1）。
+    /// 段階表: 0–2 → 1x / 3–7 → 2x / 8–14 → 3x / 15–24 → 4x / 25–39 → 5x / 40+ → 6x。
     static func points(forCombo combo: Int) -> Int {
         switch combo {
-        case ..<5:    return 1
-        case 5..<10:  return 2
-        case 10..<20: return 3
-        case 20..<30: return 4
-        default:      return 5
+        case ..<3:    return 1
+        case 3..<8:   return 2
+        case 8..<15:  return 3
+        case 15..<25: return 4
+        case 25..<40: return 5
+        default:      return 6
+        }
+    }
+
+    /// UI 表示用エイリアス。意味は `points(forCombo:)` と同じ（1 文字あたりの倍率）。
+    static func multiplier(forCombo combo: Int) -> Int {
+        points(forCombo: combo)
+    }
+
+    /// 次の倍率階層に到達する combo 閾値。最高層 (6x) では nil。
+    static func nextThreshold(forCombo combo: Int) -> Int? {
+        switch combo {
+        case ..<3:   return 3
+        case ..<8:   return 8
+        case ..<15:  return 15
+        case ..<25:  return 25
+        case ..<40:  return 40
+        default:     return nil
+        }
+    }
+
+    /// 現在の倍率階層が始まる combo（進捗バー計算用）。
+    static func currentTierStart(forCombo combo: Int) -> Int {
+        switch combo {
+        case ..<3:   return 0
+        case ..<8:   return 3
+        case ..<15:  return 8
+        case ..<25:  return 15
+        case ..<40:  return 25
+        default:     return 40
         }
     }
 
