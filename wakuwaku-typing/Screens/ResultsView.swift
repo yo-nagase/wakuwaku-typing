@@ -8,9 +8,7 @@ struct ResultsView: View {
     let onRestart: () -> Void
     let onHome: () -> Void
 
-    private var score: Int {
-        ScoreCalculator.score(wpm: result.wpm, accuracyPercent: result.acc, combo: result.combo)
-    }
+    private var score: Int { result.score }
 
     private var rank: Rank {
         ScoreCalculator.rank(for: score)

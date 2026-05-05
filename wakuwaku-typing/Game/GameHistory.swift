@@ -19,4 +19,5 @@ struct GameResult: Equatable {
     var words: Int
     var time: Int
     var course: String
+    var score: Int
 }

@@ -45,9 +45,8 @@ struct RootView: View {
                 theme: theme,
                 settings: appState.settings,
                 onEnd: { result in
-                    let newScore = ScoreCalculator.score(wpm: result.wpm, accuracyPercent: result.acc, combo: result.combo)
                     let prevBest = appState.history.map(\.score).max() ?? 0
-                    lastResultWasNewBest = newScore > prevBest
+                    lastResultWasNewBest = result.score > prevBest
                     appState.recordResult(result)
                     appState.currentScreen = .results
                 },
@@ -56,7 +55,7 @@ struct RootView: View {
         case .results:
             ResultsView(
                 theme: theme,
-                result: appState.lastResult ?? GameResult(wpm: 0, acc: 0, combo: 0, words: 0, time: 30, course: "—"),
+                result: appState.lastResult ?? GameResult(wpm: 0, acc: 0, combo: 0, words: 0, time: 30, course: "—", score: 0),
                 isNewBest: lastResultWasNewBest,
                 gameCenter: appState.gameCenter,
                 onRestart: { appState.currentScreen = .game },

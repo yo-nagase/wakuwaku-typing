@@ -15,7 +15,6 @@ final class GameViewModel {
     private(set) var shakeCount = 0
     private(set) var lastWrongAt: Date?
 
-    var paused = false
     private(set) var started = false
     private(set) var finished = false
 
@@ -27,6 +26,7 @@ final class GameViewModel {
         var words = 0
         var combo = 0
         var maxCombo = 0
+        var score = 0
         var totalChars: Int { correctChars + wrongChars }
         var accuracyPercent: Int {
             totalChars == 0 ? 100 : Int((Double(correctChars) / Double(totalChars)) * 100.0)
@@ -60,6 +60,8 @@ final class GameViewModel {
         return Int((Double(stats.words) / Double(elapsed)) * 60.0)
     }
 
+    var liveScore: Int { stats.score }
+
     var expectedKey: Character? { matcher.expectedNext }
 
     func start() {
@@ -70,7 +72,7 @@ final class GameViewModel {
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
                 if Task.isCancelled { return }
                 await MainActor.run {
-                    guard !self.paused, !self.finished else { return }
+                    guard !self.finished else { return }
                     if self.timeRemaining > 0 {
                         self.timeRemaining -= 1
                     }
@@ -83,21 +85,19 @@ final class GameViewModel {
         }
     }
 
-    func togglePause() { paused.toggle() }
-
     func quit() {
         timerTask?.cancel()
         timerTask = nil
     }
 
     func handle(_ kana: Character) {
-        guard !paused, !finished else { return }
+        guard !finished else { return }
         if !started { start() }
         process(matcher.ingest(kana))
     }
 
     func handleModifier() {
-        guard !paused, !finished else { return }
+        guard !finished else { return }
         if !started { start() }
         process(matcher.applyModifier())
     }
@@ -108,14 +108,16 @@ final class GameViewModel {
             stats.correctChars += 1
             stats.combo += 1
             stats.maxCombo = max(stats.maxCombo, stats.combo)
-            spawnParticles(count: 8)
+            stats.score += ScoreCalculator.points(forCombo: stats.combo)
+            spawnParticles(forCombo: stats.combo, isComplete: false)
             Haptics.tap()
         case .complete:
             stats.correctChars += 1
             stats.combo += 1
             stats.maxCombo = max(stats.maxCombo, stats.combo)
+            stats.score += ScoreCalculator.points(forCombo: stats.combo)
             stats.words += 1
-            spawnParticles(count: 20)
+            spawnParticles(forCombo: stats.combo, isComplete: true)
             advanceWord()
             Haptics.success()
         case .wrong:
@@ -135,23 +137,38 @@ final class GameViewModel {
         matcher = KanaMatcher(target: next)
     }
 
-    private func spawnParticles(count: Int) {
+    private func spawnParticles(forCombo combo: Int, isComplete: Bool) {
+        let count: Int = isComplete
+            ? 20 + min(combo, 30)
+            : 8 + min(combo, 16)
+        let velocityScale = 1.0 + Double(min(combo, 20)) / 40.0
+        let baseChars: [Character] = ["Z", "X", "*", "+", "·"]
+        let chars: [Character] = combo >= 20
+            ? baseChars + ["★", "♥", "◆"]
+            : baseChars
         let now = Date()
-        let chars: [Character] = ["Z", "X", "*", "+", "·"]
-        let colors: [ParticleColor] = [.primary, .accent, .secondary]
         for _ in 0..<count {
             particles.append(Particle(
                 createdAt: now,
                 lifetime: 0.8,
                 originX: 0.5 + Double.random(in: -0.15...0.15),
                 originY: 0.5 + Double.random(in: -0.05...0.05),
-                velocityX: Double.random(in: -2.5...2.5),
-                velocityY: Double.random(in: -3.5 ... -1.5),
+                velocityX: Double.random(in: -2.5...2.5) * velocityScale,
+                velocityY: Double.random(in: -3.5 ... -1.5) * velocityScale,
                 char: chars.randomElement() ?? "*",
-                color: colors.randomElement() ?? .primary
+                color: pickParticleColor(forCombo: combo)
             ))
         }
         particles.removeAll { now.timeIntervalSince($0.createdAt) > $0.lifetime + 0.5 }
+    }
+
+    private func pickParticleColor(forCombo combo: Int) -> ParticleColor {
+        // combo<10: 等確率 / combo≥10: accent 寄り (60%) / combo≥20: accent 重視 (75%)
+        let accentBias: Double = combo >= 20 ? 0.75 : (combo >= 10 ? 0.60 : 1.0/3.0)
+        if Double.random(in: 0..<1) < accentBias {
+            return .accent
+        }
+        return Bool.random() ? .primary : .secondary
     }
 
     func currentResult() -> GameResult {
@@ -162,7 +179,8 @@ final class GameViewModel {
             combo: stats.maxCombo,
             words: stats.words,
             time: duration,
-            course: "\(pack.jp) / \(duration)s"
+            course: "\(pack.jp) / \(duration)s",
+            score: stats.score
         )
     }
 }

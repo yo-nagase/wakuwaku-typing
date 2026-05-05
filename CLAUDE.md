@@ -17,11 +17,11 @@ Native iOS app: a Japanese-kana typing game ("WakuWakuタイピング"). Pure Sw
 ```sh
 # Build (Debug)
 xcodebuild -project wakuwaku-typing.xcodeproj -scheme wakuwaku-typing \
-  -destination 'platform=iOS Simulator,name=iPhone 16' build
+  -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.2' build
 
 # Run all tests (unit + UI)
 xcodebuild -project wakuwaku-typing.xcodeproj -scheme wakuwaku-typing \
-  -destination 'platform=iOS Simulator,name=iPhone 16' test
+  -destination 'platform=iOS Simulator,name=iPhone 17,OS=26.2' test
 
 # Run a single unit-test class or method (Swift Testing framework)
 xcodebuild ... test -only-testing:wakuwaku-typingTests/KanaMatcherTests
@@ -41,10 +41,10 @@ Set `WT_RESET=1` in the launch environment to wipe persisted state on launch (us
 There is **no `NavigationStack`**. [RootView.swift](wakuwaku-typing/App/RootView.swift) is a `switch` over `AppState.currentScreen` (a `Screen` enum). To add a screen: add a case to `Screen` in [AppState.swift](wakuwaku-typing/State/AppState.swift), build the `*View` in [Screens/](wakuwaku-typing/Screens/), and wire it in `RootView.content`. Screens receive callbacks (`onEnd`, `onBack`, etc.) instead of pushing navigation themselves.
 
 ### State
-- [AppState](wakuwaku-typing/State/AppState.swift) is the top-level `@Observable @MainActor` store: settings, history, current screen, last result, and the `GameCenterManager`. All mutations route through `updateSettings { ... }` / `recordResult(_:)` which persist automatically via [Persistence](wakuwaku-typing/State/Persistence.swift) (UserDefaults key `kanaTyper.v1`).
+- [AppState](wakuwaku-typing/State/AppState.swift) is the top-level `@Observable @MainActor` store: settings, history, current screen, last result, and the `GameCenterManager`. All mutations route through `updateSettings { ... }` / `recordResult(_:)` which persist automatically via [Persistence](wakuwaku-typing/State/Persistence.swift) (UserDefaults key `kanaTyper.v1`). `history` is capped at 50 entries, so for lifetime aggregates use the dedicated persistent counters `cumulativeScore` and `totalGames` (incremented in `recordResult`) — do **not** sum `history` for "TOTAL" displays.
 - [GameViewModel](wakuwaku-typing/State/GameViewModel.swift) owns one round: the timer task, stats, particle list, and the `KanaMatcher`. Constructed fresh per game in `GameView.init` — do not try to share or hoist it.
 - Use the `Observation` framework (`@Observable`, `@State`), not `ObservableObject` / `@StateObject`.
-- Score formula and rank thresholds live in [ScoreCalculator](wakuwaku-typing/Game/Score.swift). Always go through `ScoreCalculator.score(wpm:accuracyPercent:combo:)` rather than recomputing inline — `RootView` calls it to detect "new best" before `recordResult`, and `AppState.recordResult` calls it again to persist; both paths must agree.
+- Score is a **per-character accumulator**, not an end-of-round derived metric. Each correct kana adds `ScoreCalculator.points(forCombo:)` to `GameViewModel.Stats.score` (combo is incremented first, so the first correct kana scores at combo=1). Tier table in [Score.swift](wakuwaku-typing/Game/Score.swift): combo 0–4 → 1pt, 5–9 → 2pt, 10–19 → 3pt, 20–29 → 4pt, 30+ → 5pt. A wrong input resets `combo` to 0 (no score subtraction). The accumulated total is read live as `viewModel.liveScore` (= `stats.score`) and shipped to `recordResult` via `GameResult.score` — `AppState.recordResult` and `RootView` (new-best check) both consume `result.score` directly; never recompute. `Rank` thresholds also live in `Score.swift` (S 300+ / A 200+ / B 120+ / C 60+ / D under) and assume a ~0–340 range for a perfect 30s round.
 
 ### The kana input system (the non-obvious part)
 This is the heart of the game and spans three files. Read them together before changing input behavior:
@@ -62,7 +62,11 @@ This is the heart of the game and spans three files. Read them together before c
 Three themes (`.neon`, `.matrix`, `.sunset`) defined as static properties on [Theme](wakuwaku-typing/UI/Theme.swift). `Theme` is passed explicitly down the view tree as a `let theme: Theme` parameter — it is not in the environment. When adding a screen, follow this convention.
 
 ### Game Center
-[GameCenterManager](wakuwaku-typing/State/GameCenterManager.swift) handles authentication and score submission. Leaderboard IDs are hardcoded constants and must match App Store Connect configuration: `wakuwaku_typing_best_score`, `wakuwaku_typing_best_15s/30s/60s`. Authentication runs once on `RootView.onAppear`; submission is fire-and-forget per round.
+[GameCenterManager](wakuwaku-typing/State/GameCenterManager.swift) handles authentication and score submission. Leaderboard IDs are hardcoded constants and must match App Store Connect configuration: `wakuwaku_typing_best_score`, `wakuwaku_typing_best_15s`, `typing_best_30s`, `wakuwaku_typing_best_60s` (note: 30s leaderboard uses a shorter prefix), and `cumulative_score` (lifetime total — receives a different value than the per-round IDs). **The per-round leaderboards all receive the same per-round score**; the cumulative leaderboard receives `AppState.cumulativeScore`. Game Center automatically keeps the player's max per leaderboard, so we don't track best score locally for submission. `submitScore(_:duration:)` skips score=0 submissions, includes the matching `_best_NNs` ID only when duration ∈ {15, 30, 60}, and is fire-and-forget. `submitCumulativeScore(_:)` is a separate fire-and-forget call (the running total is a different score value, so it can't share the per-round batch). Both are dispatched from `AppState.recordResult`. Authentication runs once on `RootView.onAppear`. The Game Center capability lives in [wakuwaku-typing/wakuwaku-typing.entitlements](wakuwaku-typing/wakuwaku-typing.entitlements) — add new capabilities there.
+
+⚠️ App Store Connect leaderboard configuration must match: **Score Format Type = Integer, Decimal Places = 0, Sort Order = Highest is Best**. Setting Decimal Places > 0 will display submitted integers scaled (e.g. score=250 with 2 decimals → "2.50"); setting Sort Order to "Lowest is Best" makes Game Center keep the lowest score, not the best.
+
+`AppState.cumulativeScore` powers the home screen `★ TOTAL` tile and the in-app leaderboard's TOTAL tab, **and** is submitted to the `cumulative_score` Game Center leaderboard after each round. `AppState.totalGames` is local-only.
 
 ### Custom fonts
 `PressStart2P-Regular.ttf` and `DotGothic16-Regular.ttf` live in [wakuwaku-typing/Resources/Fonts/](wakuwaku-typing/Resources/Fonts/) and are registered via `UIAppFonts` in [Config/Info.plist](Config/Info.plist). Always reference them through [AppFont.pixel(_:)](wakuwaku-typing/UI/Fonts.swift) and `AppFont.kana(_:)` — never hardcode the font names elsewhere.

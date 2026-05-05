@@ -30,22 +30,21 @@ struct GameView: View {
                     .padding(.top, 16)
                     .padding(.bottom, 8)
 
-                if viewModel.stats.combo >= 3 {
-                    Text("★ COMBO ×\(viewModel.stats.combo)")
-                        .font(AppFont.pixel(14))
-                        .kerning(2)
-                        .foregroundStyle(theme.accent)
-                        .glow(theme.accent, radius: 12)
-                        .padding(.bottom, 4)
-                }
+                progressBar
+                    .padding(.bottom, 8)
+
+                Text("★ COMBO ×\(max(viewModel.stats.combo, 3))")
+                    .font(AppFont.pixel(14))
+                    .kerning(2)
+                    .foregroundStyle(theme.accent)
+                    .glow(theme.accent, radius: 12)
+                    .opacity(viewModel.stats.combo >= 3 ? 1 : 0)
+                    .padding(.bottom, 4)
 
                 Spacer()
 
                 wordDisplay
                     .padding(.horizontal, 24)
-
-                progressBar
-                    .padding(.top, 16)
 
                 Text("WORDS·\(viewModel.stats.words)  ·  COMBO·\(viewModel.stats.combo)/\(viewModel.stats.maxCombo)")
                     .font(AppFont.pixel(9))
@@ -64,6 +63,9 @@ struct GameView: View {
                     .keyboardType(.default)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
+                    // .oneTimeCode で IME に「ワンタイムコード入力欄」と伝えると、
+                    // 日本語かな入力の変換候補バーが抑制される。
+                    .textContentType(.oneTimeCode)
                     .frame(width: 1, height: 1)
                     .opacity(0.01)
                     .onChange(of: input) { old, new in
@@ -77,10 +79,6 @@ struct GameView: View {
             ParticleLayer(particles: viewModel.particles, theme: theme)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
-
-            if viewModel.paused {
-                pauseOverlay
-            }
         }
         .foregroundStyle(theme.text)
         .onChange(of: viewModel.shakeCount) { _, _ in performShake() }
@@ -140,9 +138,9 @@ struct GameView: View {
         HStack(spacing: 8) {
             iconButton("✕") { onExit() }
             StatBlock(theme: theme, label: "TIME", value: "\(viewModel.timeRemaining)s", big: true)
+            StatBlock(theme: theme, label: "SCORE", value: "\(viewModel.liveScore)", big: true)
             StatBlock(theme: theme, label: "WPM", value: "\(viewModel.liveWPM)", big: true)
             StatBlock(theme: theme, label: "ACC", value: "\(viewModel.stats.accuracyPercent)%", big: true)
-            iconButton(viewModel.paused ? "▶" : "‖") { viewModel.togglePause() }
         }
     }
 
@@ -201,25 +199,6 @@ struct GameView: View {
         }
         .frame(height: 8)
         .padding(.horizontal, 32)
-    }
-
-    private var pauseOverlay: some View {
-        ZStack {
-            Color.black.opacity(0.85).ignoresSafeArea()
-            VStack(spacing: 16) {
-                Text("‖ PAUSED")
-                    .font(AppFont.pixel(24))
-                    .kerning(4)
-                    .foregroundStyle(theme.accent)
-                PixelButton(theme: theme, primary: true, "▶ RESUME") {
-                    viewModel.togglePause()
-                }
-                PixelButton(theme: theme, small: true, "✕ QUIT") {
-                    viewModel.quit()
-                    onExit()
-                }
-            }
-        }
     }
 
     private func performShake() {

@@ -7,12 +7,16 @@ struct HomeView: View {
     let onScreen: (Screen) -> Void
 
     @State private var blink = true
+    @State private var prewarmText = ""
+    @FocusState private var prewarmFocused: Bool
 
-    private var totals: (total: Int, games: Int, best: Int) {
-        let h = appState.history
-        let total = h.reduce(0) { $0 + $1.score }
-        let best = h.map(\.score).max() ?? 0
-        return (total, h.count, best)
+    /// アプリプロセス全体で1回だけ実行する。HomeView は results 画面から戻るたび
+    /// onAppear が再発火するため、@State だと再プリウォームしてしまう。
+    nonisolated(unsafe) private static var didPrewarmKeyboard = false
+
+    private var totals: (total: Int, games: Int) {
+        // 累計スコア / 通算プレイ数は永続フィールドを使う（履歴は 50 件で打ち切られるため）。
+        (appState.cumulativeScore, appState.totalGames)
     }
 
     var body: some View {
@@ -30,13 +34,7 @@ struct HomeView: View {
 
                 Spacer(minLength: 24)
 
-                SpriteSheetView(
-                    imageName: "typing_coffee_boy_24",
-                    frameSize: CGSize(width: 64, height: 64),
-                    frameCount: 24,
-                    frameDuration: 0.2,
-                    scale: 4
-                )
+                PixelMascot(theme: theme, dotSize: 9)
 
                 Spacer(minLength: 16)
 
@@ -48,9 +46,40 @@ struct HomeView: View {
                     .padding(.horizontal, 16)
                     .padding(.bottom, 24)
             }
+
+            // GameView と同じ TextField 設定で初回 first-responder にし、
+            // システムのかな IME をプロセスにロードさせるためだけの隠しフィールド。
+            // 入場直後にフォーカス→即座に外すことで、キーボードが画面に出る前に
+            // IME 初期化のコストを払い終える。
+            TextField("", text: $prewarmText)
+                .focused($prewarmFocused)
+                .keyboardType(.default)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .textContentType(.oneTimeCode)
+                .frame(width: 1, height: 1)
+                .opacity(0)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
         }
         .foregroundStyle(theme.text)
-        .onAppear { startBlink() }
+        .onAppear {
+            startBlink()
+            prewarmKeyboardIfNeeded()
+        }
+    }
+
+    private func prewarmKeyboardIfNeeded() {
+        guard !Self.didPrewarmKeyboard else { return }
+        Self.didPrewarmKeyboard = true
+        // 画面遷移アニメ完了直後にフォーカス → IME ロード開始 → 即外して
+        // キーボードのスライドアップを描画前にキャンセル。
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+            prewarmFocused = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                prewarmFocused = false
+            }
+        }
     }
 
     private var titleBlock: some View {
@@ -74,10 +103,7 @@ struct HomeView: View {
 
     private var statTilesRow: some View {
         let t = totals
-        return HStack(spacing: 8) {
-            tile(label: "★ TOTAL", value: t.total, sub: "GAMES·\(t.games)", color: theme.accent)
-            tile(label: "♕ BEST", value: t.best, sub: "SINGLE RUN", color: theme.primary)
-        }
+        return tile(label: "★ TOTAL", value: t.total, sub: "GAMES·\(t.games)", color: theme.accent)
     }
 
     private func tile(label: String, value: Int, sub: String, color: Color) -> some View {
@@ -98,6 +124,7 @@ struct HomeView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(12)
+            .background(Rectangle().fill(Color.black.opacity(0.5)))
             .overlay(Rectangle().stroke(color, lineWidth: 3))
             .background(
                 Rectangle()

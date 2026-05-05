@@ -5,9 +5,15 @@ struct LeaderboardView: View {
     let appState: AppState
     let onBack: () -> Void
 
-    enum Tab { case total, best }
+    enum Tab { case total, best, history }
     @State private var tab: Tab = .total
     @State private var open: Entry?
+
+    private static let dateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd HH:mm"
+        return f
+    }()
 
     struct Entry: Identifiable, Hashable {
         let id = UUID()
@@ -111,7 +117,7 @@ struct LeaderboardView: View {
                 }
 
                 tabSwitcher
-                Text(tab == .total ? "累計スコア = ALL GAMES SUMMED" : "ベストスコア = SINGLE BEST RUN")
+                Text(tabDescription)
                     .font(AppFont.pixel(8))
                     .kerning(1)
                     .foregroundStyle(theme.textDim)
@@ -119,11 +125,15 @@ struct LeaderboardView: View {
                     .padding(6)
                     .overlay(Rectangle().stroke(style: .init(lineWidth: 1, dash: [4, 3])).foregroundStyle(theme.textDim))
 
-                let b = boards()
-                let list = tab == .total ? b.total : b.best
-                VStack(spacing: 4) {
-                    ForEach(list, id: \.id) { entry in
-                        rowButton(entry: entry, value: tab == .total ? entry.total : entry.best)
+                if tab == .history {
+                    historyList
+                } else {
+                    let b = boards()
+                    let list = tab == .total ? b.total : b.best
+                    VStack(spacing: 4) {
+                        ForEach(list, id: \.id) { entry in
+                            rowButton(entry: entry, value: tab == .total ? entry.total : entry.best)
+                        }
                     }
                 }
             }
@@ -139,7 +149,92 @@ struct LeaderboardView: View {
         HStack(spacing: 4) {
             tabButton(.total, label: "★ TOTAL", jp: "累計")
             tabButton(.best, label: "♕ BEST", jp: "ベスト")
+            tabButton(.history, label: "≡ LOG", jp: "履歴")
         }
+    }
+
+    private var tabDescription: String {
+        switch tab {
+        case .total: return "累計スコア = ALL GAMES SUMMED"
+        case .best: return "ベストスコア = SINGLE BEST RUN"
+        case .history: return "プレイ履歴 = RECENT GAMES"
+        }
+    }
+
+    @ViewBuilder
+    private var historyList: some View {
+        let history = appState.history
+        if history.isEmpty {
+            VStack(spacing: 6) {
+                Text("NO GAMES YET")
+                    .font(AppFont.pixel(11))
+                    .kerning(2)
+                    .foregroundStyle(theme.textDim)
+                Text("まだプレイ履歴がありません")
+                    .font(AppFont.kana(10))
+                    .kerning(2)
+                    .foregroundStyle(theme.textDim)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 32)
+            .overlay(Rectangle().stroke(style: .init(lineWidth: 1, dash: [4, 3])).foregroundStyle(theme.textDim))
+        } else {
+            VStack(spacing: 4) {
+                ForEach(Array(history.enumerated()), id: \.element.id) { (i, h) in
+                    historyRowButton(index: i, entry: h)
+                }
+            }
+        }
+    }
+
+    private func historyRowButton(index: Int, entry h: HistoryEntry) -> some View {
+        Button { open = entry(from: h, rank: index + 1) } label: {
+            HStack(spacing: 0) {
+                Text(String(format: "%02d", index + 1))
+                    .font(AppFont.pixel(14))
+                    .foregroundStyle(index == 0 ? theme.accent : theme.textDim)
+                    .frame(width: 36, alignment: .leading)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(Self.dateFormatter.string(from: h.date))
+                        .font(AppFont.pixel(10))
+                        .kerning(1)
+                        .foregroundStyle(theme.text)
+                    Text("\(h.course) · \(h.wpm)wpm · \(h.acc)%")
+                        .font(AppFont.pixel(8))
+                        .kerning(1)
+                        .foregroundStyle(theme.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Text("\(h.score) PTS")
+                    .font(AppFont.pixel(11))
+                    .foregroundStyle(theme.accent)
+            }
+            .padding(.vertical, 10)
+            .padding(.horizontal, 12)
+            .background(Color.black.opacity(0.3))
+            .overlay(Rectangle().stroke(theme.textDim, lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func entry(from h: HistoryEntry, rank: Int) -> Entry {
+        Entry(
+            rank: rank,
+            name: appState.settings.name.isEmpty ? "YOU" : appState.settings.name,
+            best: h.score,
+            total: h.score,
+            games: 1,
+            wpm: h.wpm,
+            acc: h.acc,
+            combo: h.combo,
+            words: h.words,
+            time: h.time,
+            date: Self.dateFormatter.string(from: h.date),
+            course: h.course,
+            isYou: true
+        )
     }
 
     private func tabButton(_ which: Tab, label: String, jp: String) -> some View {
@@ -169,11 +264,20 @@ struct LeaderboardView: View {
                     .font(AppFont.pixel(14))
                     .foregroundStyle(entry.rank == 1 ? theme.accent : (entry.rank <= 3 ? theme.secondary : theme.textDim))
                     .frame(width: 36, alignment: .leading)
-                Text(entry.name + (entry.isYou ? " ◀" : ""))
-                    .font(AppFont.pixel(11))
-                    .kerning(1)
-                    .foregroundStyle(entry.isYou ? theme.accent : theme.text)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(entry.name + (entry.isYou ? " ◀" : ""))
+                        .font(AppFont.pixel(11))
+                        .kerning(1)
+                        .foregroundStyle(entry.isYou ? theme.accent : theme.text)
+                    if tab == .best {
+                        Text(entry.date)
+                            .font(AppFont.pixel(7))
+                            .kerning(1)
+                            .foregroundStyle(theme.textDim)
+                            .lineLimit(1)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 Text(tab == .total ? "×\(entry.games)" : "\(entry.wpm)wpm")
                     .font(AppFont.pixel(8))
                     .foregroundStyle(theme.secondary)

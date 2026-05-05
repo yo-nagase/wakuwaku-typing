@@ -6,6 +6,8 @@ enum Persistence {
     struct Storage: Codable {
         var settings: AppSettings
         var history: [HistoryEntry]
+        var cumulativeScore: Int?
+        var totalGames: Int?
     }
 
     static func load() -> Storage? {

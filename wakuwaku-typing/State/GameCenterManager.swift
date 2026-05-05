@@ -7,10 +7,11 @@ final class GameCenterManager: NSObject {
 
     // MARK: - Leaderboard IDs (App Store Connect で設定する)
     enum LeaderboardID {
-        static let bestScore = "wakuwaku_typing_best_score"
-        static let best15s   = "wakuwaku_typing_best_15s"
-        static let best30s   = "wakuwaku_typing_best_30s"
-        static let best60s   = "wakuwaku_typing_best_60s"
+        static let bestScore       = "wakuwaku_typing_best_score"
+        static let best15s         = "wakuwaku_typing_best_15s"
+        static let best30s         = "typing_best_30s"
+        static let best60s         = "wakuwaku_typing_best_60s"
+        static let cumulativeScore = "cumulative_score"
 
         static func forDuration(_ seconds: Int) -> String? {
             switch seconds {
@@ -59,6 +60,8 @@ final class GameCenterManager: NSObject {
 
     // MARK: - Submit Score
 
+    /// 単発ラウンドのスコアを `bestScore` および該当する `_best_NNs` リーダーボードに送信する。
+    /// Game Center 側で自動的に最高値を保持するので、ローカルで max を比較する必要はない。
     func submitScore(_ score: Int, duration: Int) {
         guard isAuthenticated else {
             print("[GameCenter] Not authenticated – skip submit (score=\(score), duration=\(duration))")
@@ -86,6 +89,32 @@ final class GameCenterManager: NSObject {
                 print("[GameCenter] ✓ Submit succeeded: score=\(score) ids=\(ids)")
             } catch {
                 print("[GameCenter] ✗ Submit failed: \(error) (score=\(score), ids=\(ids))")
+            }
+        }
+    }
+
+    /// 累積スコアを `cumulative_score` リーダーボードに送信する。
+    /// Game Center 側で max を保持するため、ローカル累積値をそのまま送るだけで良い。
+    func submitCumulativeScore(_ total: Int) {
+        guard isAuthenticated else {
+            print("[GameCenter] Not authenticated – skip cumulative submit (total=\(total))")
+            return
+        }
+        guard total > 0 else { return }
+        let id = LeaderboardID.cumulativeScore
+        print("[GameCenter] Submitting cumulative=\(total) to \(id)")
+
+        Task {
+            do {
+                try await GKLeaderboard.submitScore(
+                    total,
+                    context: 0,
+                    player: GKLocalPlayer.local,
+                    leaderboardIDs: [id]
+                )
+                print("[GameCenter] ✓ Cumulative submit succeeded: total=\(total)")
+            } catch {
+                print("[GameCenter] ✗ Cumulative submit failed: \(error) (total=\(total))")
             }
         }
     }

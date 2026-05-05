@@ -2,23 +2,30 @@ import Testing
 @testable import wakuwaku_typing
 
 struct ScoreTests {
-    @Test func zeroAccuracyZeroScore() {
-        #expect(ScoreCalculator.score(wpm: 100, accuracyPercent: 0, combo: 50) == 0)
+    @Test func pointsTier1() {
+        #expect(ScoreCalculator.points(forCombo: 0) == 1)
+        #expect(ScoreCalculator.points(forCombo: 1) == 1)
+        #expect(ScoreCalculator.points(forCombo: 4) == 1)
     }
 
-    @Test func perfectAccuracyNoCombo() {
-        // 60 wpm × 1.0² × 1.0 = 60
-        #expect(ScoreCalculator.score(wpm: 60, accuracyPercent: 100, combo: 0) == 60)
+    @Test func pointsTier2() {
+        #expect(ScoreCalculator.points(forCombo: 5) == 2)
+        #expect(ScoreCalculator.points(forCombo: 9) == 2)
     }
 
-    @Test func perfectAccuracyWithCombo20() {
-        // 60 × 1 × (1 + 20/20) = 120
-        #expect(ScoreCalculator.score(wpm: 60, accuracyPercent: 100, combo: 20) == 120)
+    @Test func pointsTier3() {
+        #expect(ScoreCalculator.points(forCombo: 10) == 3)
+        #expect(ScoreCalculator.points(forCombo: 19) == 3)
     }
 
-    @Test func partialAccuracy() {
-        // 80 × 0.81 × 1.5 = 97.2 → 97
-        #expect(ScoreCalculator.score(wpm: 80, accuracyPercent: 90, combo: 10) == 97)
+    @Test func pointsTier4() {
+        #expect(ScoreCalculator.points(forCombo: 20) == 4)
+        #expect(ScoreCalculator.points(forCombo: 29) == 4)
+    }
+
+    @Test func pointsTier5() {
+        #expect(ScoreCalculator.points(forCombo: 30) == 5)
+        #expect(ScoreCalculator.points(forCombo: 100) == 5)
     }
 
     @Test func rankBoundaries() {
