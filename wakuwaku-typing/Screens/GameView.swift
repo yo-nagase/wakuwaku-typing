@@ -159,8 +159,8 @@ struct GameView: View {
     }
 
     private var attributedTarget: AttributedString {
-        let done = viewModel.matcher.done
-        let target = viewModel.matcher.target
+        let done = viewModel.doneText
+        let target = viewModel.targetText
         var donePart = AttributedString(done)
         donePart.foregroundColor = theme.correct.opacity(0.6)
         var remainPart = AttributedString(String(target.dropFirst(done.count)))

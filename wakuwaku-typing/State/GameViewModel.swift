@@ -7,8 +7,11 @@ final class GameViewModel {
     let pack: WordPack
     let duration: Int
     let difficulty: Difficulty
+    let inputMode: InputMode
 
-    private(set) var matcher: KanaMatcher
+    // モードに応じて一方だけ非 nil
+    private(set) var kanaMatcher: KanaMatcher?
+    private(set) var romajiMatcher: RomajiMatcher?
     private(set) var timeRemaining: Int
     private(set) var stats = Stats()
     private(set) var particles: [Particle] = []
@@ -47,12 +50,17 @@ final class GameViewModel {
         let color: ParticleColor
     }
 
-    init(pack: WordPack = WordPacks.kotowaza, duration: Int = 30, difficulty: Difficulty = .normal) {
+    init(pack: WordPack = WordPacks.kotowaza, duration: Int = 30, difficulty: Difficulty = .normal, inputMode: InputMode = .flick) {
         self.pack = pack
         self.duration = duration
         self.difficulty = difficulty
+        self.inputMode = inputMode
         self.timeRemaining = duration
-        self.matcher = KanaMatcher(target: pack.entries.randomElement() ?? "")
+        let target = pack.entries.randomElement() ?? ""
+        switch inputMode {
+        case .flick: self.kanaMatcher = KanaMatcher(target: target)
+        case .romaji: self.romajiMatcher = RomajiMatcher(target: target)
+        }
     }
 
     var liveWPM: Int {
@@ -62,7 +70,13 @@ final class GameViewModel {
 
     var liveScore: Int { stats.score }
 
-    var expectedKey: Character? { matcher.expectedNext }
+    var expectedKey: Character? { kanaMatcher?.expectedNext }
+
+    // 表示用共通アクセサ（GameView はモードを意識せずこちらを読む）
+    var targetText: String { kanaMatcher?.target ?? romajiMatcher?.target ?? "" }
+    var doneText: String { kanaMatcher?.done ?? romajiMatcher?.done ?? "" }
+    var romajiTyped: String { romajiMatcher?.typed ?? "" }
+    var romajiRemaining: String { romajiMatcher?.remainingRomaji ?? "" }
 
     func start() {
         guard !started, !finished else { return }
@@ -93,13 +107,22 @@ final class GameViewModel {
     func handle(_ kana: Character) {
         guard !finished else { return }
         if !started { start() }
-        process(matcher.ingest(kana))
+        guard let result = kanaMatcher?.ingest(kana) else { return }
+        process(result)
     }
 
     func handleModifier() {
         guard !finished else { return }
         if !started { start() }
-        process(matcher.applyModifier())
+        guard let result = kanaMatcher?.applyModifier() else { return }
+        process(result)
+    }
+
+    func handleAscii(_ ch: Character) {
+        guard inputMode == .romaji, !finished else { return }
+        if !started { start() }
+        guard let result = romajiMatcher?.ingest(ch) else { return }
+        processRomaji(result)
     }
 
     private func process(_ result: KanaMatcher.InputResult) {
@@ -131,10 +154,48 @@ final class GameViewModel {
         }
     }
 
+    private func processRomaji(_ result: RomajiMatcher.InputResult) {
+        switch result {
+        case .progress:
+            break
+        case .correct(let n):
+            awardKana(count: n)
+            spawnParticles(forCombo: stats.combo, isComplete: false)
+            Haptics.tap()
+        case .complete(let n):
+            awardKana(count: n)
+            stats.words += 1
+            spawnParticles(forCombo: stats.combo, isComplete: true)
+            advanceWord()
+            Haptics.success()
+        case .wrong:
+            stats.wrongChars += 1
+            stats.combo = 0
+            shakeCount += 1
+            lastWrongAt = Date()
+            Haptics.wrong()
+        }
+    }
+
+    /// かな確定ぶんだけ加点（フリックと同一のかな単位スコアリング）。
+    /// 拗音や「ん+子音」結合は 1 打鍵で複数かなが確定するため count 回まわす。
+    private func awardKana(count: Int) {
+        for _ in 0..<count {
+            stats.correctChars += 1
+            stats.combo += 1
+            stats.maxCombo = max(stats.maxCombo, stats.combo)
+            stats.score += ScoreCalculator.points(forCombo: stats.combo)
+        }
+    }
+
     private func advanceWord() {
-        let candidates = pack.entries.filter { $0 != matcher.target }
+        let current = targetText
+        let candidates = pack.entries.filter { $0 != current }
         let next = (candidates.isEmpty ? pack.entries : candidates).randomElement() ?? ""
-        matcher = KanaMatcher(target: next)
+        switch inputMode {
+        case .flick: kanaMatcher = KanaMatcher(target: next)
+        case .romaji: romajiMatcher = RomajiMatcher(target: next)
+        }
     }
 
     private func spawnParticles(forCombo combo: Int, isComplete: Bool) {
@@ -182,7 +243,7 @@ final class GameViewModel {
             combo: stats.maxCombo,
             words: stats.words,
             time: duration,
-            course: "\(pack.jp) / \(duration)s",
+            course: "\(pack.jp) / \(duration)s" + (inputMode == .romaji ? " / R" : ""),
             score: stats.score
         )
     }
