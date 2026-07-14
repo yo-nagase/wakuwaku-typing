@@ -17,7 +17,7 @@ struct GameView: View {
         self.onEnd = onEnd
         self.onExit = onExit
         let pack = WordPacks.pack(id: settings.packID)
-        self._viewModel = State(initialValue: GameViewModel(pack: pack, duration: settings.duration.rawValue, difficulty: settings.difficulty))
+        self._viewModel = State(initialValue: GameViewModel(pack: pack, duration: settings.duration.rawValue, difficulty: settings.difficulty, inputMode: settings.inputMode))
     }
 
     var body: some View {
@@ -51,7 +51,7 @@ struct GameView: View {
                 // 日本語かな入力時の IME 変換候補バーを抑止するため、
                 // UITextField を UIViewRepresentable でラップして
                 // isSecureTextEntry / spellChecking / smart-* 等の抑止オプションを束ねる。
-                KanaInputField(text: $input, isFocused: $inputFocused)
+                KanaInputField(text: $input, isFocused: $inputFocused, asciiMode: viewModel.inputMode == .romaji)
                     .frame(width: 1, height: 1)
                     .opacity(0.01)
                     .onChange(of: input) { old, new in
@@ -85,11 +85,13 @@ struct GameView: View {
 
     private var inputHint: some View {
         VStack(spacing: 4) {
-            Text("iOS かなキーボードで入力")
+            Text(viewModel.inputMode == .romaji ? "英字キーボードでローマ字入力" : "iOS かなキーボードで入力")
                 .font(AppFont.pixel(8))
                 .kerning(2)
                 .foregroundStyle(theme.textDim)
-            if let next = viewModel.expectedKey {
+            if viewModel.inputMode == .romaji {
+                romajiGuide
+            } else if let next = viewModel.expectedKey {
                 Text("NEXT: ")
                     .font(AppFont.pixel(9))
                     .foregroundStyle(theme.textDim)
@@ -101,10 +103,31 @@ struct GameView: View {
         }
     }
 
+    /// 打鍵済みの綴り（accent）+ 残り綴り（dim）を 1 行で示すローマ字ガイド
+    private var romajiGuide: some View {
+        (Text(viewModel.romajiTyped)
+            .foregroundStyle(theme.accent)
+        +
+        Text(viewModel.romajiRemaining)
+            .foregroundStyle(theme.textDim))
+            .font(AppFont.pixel(12))
+            .kerning(2)
+            .lineLimit(1)
+            .minimumScaleFactor(0.5)
+    }
+
     /// Drives `viewModel.handle` from `TextField` text changes.
     /// Handles three cases: append (typed kana), replace (modifier ゛゜小), and delete (backspace).
+    /// ローマ字モードは ASCII の追記のみ処理する（修飾置換は発生しない）。
     private func feed(old: String, new: String) {
         defer { prevInput = new }
+        if viewModel.inputMode == .romaji {
+            guard new.count > old.count else { return }
+            for ch in new.dropFirst(old.count) {
+                viewModel.handleAscii(ch)
+            }
+            return
+        }
         if new.count > old.count {
             // Typed one or more new chars at end
             let added = new.dropFirst(old.count)
@@ -342,6 +365,8 @@ private struct MultiplierBadge: View {
 struct KanaInputField: UIViewRepresentable {
     @Binding var text: String
     @Binding var isFocused: Bool
+    /// true でローマ字モード: 英字（QWERTY）キーボードを強制する
+    var asciiMode: Bool = false
 
     func makeUIView(context: Context) -> UITextField {
         let tf = UITextField()
@@ -352,7 +377,7 @@ struct KanaInputField: UIViewRepresentable {
         tf.smartDashesType = .no
         tf.smartInsertDeleteType = .no
         tf.autocapitalizationType = .none
-        tf.keyboardType = .default
+        tf.keyboardType = asciiMode ? .asciiCapable : .default
         tf.textContentType = .oneTimeCode
         tf.inputAssistantItem.leadingBarButtonGroups = []
         tf.inputAssistantItem.trailingBarButtonGroups = []

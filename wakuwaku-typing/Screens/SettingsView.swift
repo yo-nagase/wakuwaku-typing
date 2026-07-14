@@ -52,6 +52,14 @@ struct SettingsView: View {
                     )
                 }
 
+                row(label: "INPUT MODE") {
+                    seg(
+                        value: appState.settings.inputMode,
+                        options: [(.flick, "FLICK"), (.romaji, "ROMAJI")],
+                        onChange: { v in appState.updateSettings { $0.inputMode = v } }
+                    )
+                }
+
                 row(label: "SOUND") {
                     seg(
                         value: appState.settings.soundOn,
