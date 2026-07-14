@@ -29,6 +29,22 @@ struct WordPackTests {
         }
     }
 
+    @Test func allActivePackEntriesAreRomajiTypable() {
+        // 表示ヒントに従って打てば全エントリが完走できる = 全かなが RomajiMatcher で入力可能
+        for pack in WordPacks.active {
+            for entry in pack.entries {
+                var m = RomajiMatcher(target: entry)
+                var steps = 0
+                while !m.isComplete, steps < 300 {
+                    guard let ch = m.remainingRomaji.first else { break }
+                    #expect(m.ingest(ch) != .wrong, "entry: \(entry)")
+                    steps += 1
+                }
+                #expect(m.isComplete, "entry '\(entry)' is not typable in romaji mode")
+            }
+        }
+    }
+
     @Test func activeListExcludesLocked() {
         #expect(WordPacks.active.count == 1)
         #expect(WordPacks.active.first?.id == "kotowaza")
