@@ -34,11 +34,22 @@ struct HomeView: View {
 
                 Spacer(minLength: 24)
 
-                PixelMascot(theme: theme, dotSize: 9)
+                Image("TypingBoy")
+                    .resizable()
+                    .interpolation(.none)
+                    .scaledToFit()
+                    .frame(height: 160)
+                    .glow(theme.primary, radius: 10)
+                    .accessibilityLabel("タイピングする少年のマスコットキャラクター")
 
                 Spacer(minLength: 16)
 
                 pressStartBlock
+
+                Spacer(minLength: 12)
+
+                inputModeSelector
+                    .padding(.horizontal, 16)
 
                 Spacer(minLength: 12)
 
@@ -146,6 +157,29 @@ struct HomeView: View {
         }
         .buttonStyle(.plain)
         .padding(.horizontal, 24)
+    }
+
+    private var inputModeSelector: some View {
+        HStack(spacing: 6) {
+            modeButton(.flick, label: "フリック")
+            modeButton(.romaji, label: "ローマ字")
+        }
+    }
+
+    private func modeButton(_ mode: InputMode, label: String) -> some View {
+        let selected = appState.settings.inputMode == mode
+        return Button { appState.updateSettings { $0.inputMode = mode } } label: {
+            Text(label)
+                .font(AppFont.kana(12))
+                .kerning(2)
+                .foregroundStyle(selected ? Color.black : theme.text)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(selected ? theme.primary : Color.clear)
+                .overlay(Rectangle().stroke(theme.primary, lineWidth: 2))
+                .glow(selected ? theme.primary : .clear, radius: 8)
+        }
+        .buttonStyle(.plain)
     }
 
     private var bottomNav: some View {

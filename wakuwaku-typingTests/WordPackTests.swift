@@ -9,22 +9,33 @@ struct WordPackTests {
         #expect(pack.entries.count >= 20)
     }
 
+    @Test func shortTextPackExists() {
+        let pack = WordPacks.shortText
+        #expect(pack.id == "shorttext")
+        #expect(!pack.isLocked)
+        #expect(pack.entries.count >= 20)
+    }
+
     @Test func allEntriesAreHiraganaOnly() {
-        for entry in WordPacks.kotowaza.entries {
-            for ch in entry {
-                let isHiragana = ch.unicodeScalars.allSatisfy { $0.value >= 0x3041 && $0.value <= 0x3096 }
-                let isLongMark = ch == "ー"
-                #expect(isHiragana || isLongMark, "Entry '\(entry)' contains non-hiragana char '\(ch)'")
+        for pack in WordPacks.active {
+            for entry in pack.entries {
+                for ch in entry {
+                    let isHiragana = ch.unicodeScalars.allSatisfy { $0.value >= 0x3041 && $0.value <= 0x3096 }
+                    let isLongMark = ch == "ー"
+                    #expect(isHiragana || isLongMark, "Entry '\(entry)' contains non-hiragana char '\(ch)'")
+                }
             }
         }
     }
 
     @Test func everyKanaIsReachableFromKeyboard() {
         let reachable = KanaKeyboardModel.reachableKana
-        for entry in WordPacks.kotowaza.entries {
-            for ch in entry {
-                let isLongMark = ch == "ー"
-                #expect(reachable.contains(ch) || isLongMark, "Char '\(ch)' in '\(entry)' is not reachable from the flick keyboard")
+        for pack in WordPacks.active {
+            for entry in pack.entries {
+                for ch in entry {
+                    let isLongMark = ch == "ー"
+                    #expect(reachable.contains(ch) || isLongMark, "Char '\(ch)' in '\(entry)' is not reachable from the flick keyboard")
+                }
             }
         }
     }
@@ -46,8 +57,7 @@ struct WordPackTests {
     }
 
     @Test func activeListExcludesLocked() {
-        #expect(WordPacks.active.count == 1)
-        #expect(WordPacks.active.first?.id == "kotowaza")
+        #expect(WordPacks.active.map(\.id) == ["kotowaza", "shorttext"])
     }
 
     @Test func packLookup() {

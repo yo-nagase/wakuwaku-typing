@@ -15,18 +15,19 @@ struct LeaderboardView: View {
         return f
     }()
 
+    /// nil = 不明（Game Center の他プレイヤーは context 由来の統計しか持たない）。表示は「—」。
     struct Entry: Identifiable, Hashable {
         let id = UUID()
         var rank: Int
         let name: String
-        let best: Int
-        let total: Int
-        let games: Int
-        let wpm: Int
-        let acc: Int
-        let combo: Int
-        let words: Int
-        let time: Int
+        let best: Int?
+        let total: Int?
+        let games: Int?
+        let wpm: Int?
+        let acc: Int?
+        let combo: Int?
+        let words: Int?
+        let time: Int?
         let date: String
         let course: String
         let isYou: Bool
@@ -45,8 +46,8 @@ struct LeaderboardView: View {
     private func boards() -> (total: [Entry], best: [Entry]) {
         let cpuFilled = Self.cpus.map { e in
             var x = e
-            // approximate cumulative — best * games^0.7
-            let est = Int(Double(e.best) * pow(Double(e.games), 0.7))
+            // approximate cumulative — best * games^0.7 (CPU ダミーは全フィールド非 nil)
+            let est = Int(Double(e.best ?? 0) * pow(Double(e.games ?? 0), 0.7))
             x = Entry(rank: 0, name: e.name, best: e.best, total: est, games: e.games, wpm: e.wpm, acc: e.acc, combo: e.combo, words: e.words, time: e.time, date: e.date, course: e.course, isYou: false)
             return x
         }
@@ -81,10 +82,10 @@ struct LeaderboardView: View {
         )
         _ = formatter
         let combined = cpuFilled + [me2]
-        let totalRanked = combined.sorted { $0.total > $1.total }.enumerated().map { (i, e) -> Entry in
+        let totalRanked = combined.sorted { ($0.total ?? 0) > ($1.total ?? 0) }.enumerated().map { (i, e) -> Entry in
             var x = e; x.rank = i + 1; return x
         }
-        let bestRanked = combined.sorted { $0.best > $1.best }.enumerated().map { (i, e) -> Entry in
+        let bestRanked = combined.sorted { ($0.best ?? 0) > ($1.best ?? 0) }.enumerated().map { (i, e) -> Entry in
             var x = e; x.rank = i + 1; return x
         }
         return (totalRanked, bestRanked)
@@ -127,12 +128,24 @@ struct LeaderboardView: View {
 
                 if tab == .history {
                     historyList
+                } else if let remote = remoteEntries {
+                    if remote.isEmpty {
+                        emptyBox(title: "NO SCORES YET", subtitle: "プレイするとランキングに載ります")
+                    } else {
+                        VStack(spacing: 4) {
+                            ForEach(remote, id: \.id) { entry in
+                                rowButton(entry: entry, value: (tab == .total ? entry.total : entry.best) ?? 0)
+                            }
+                        }
+                    }
+                } else if appState.gameCenter.isAuthenticated && appState.gameCenter.isLoadingLeaderboards {
+                    emptyBox(title: "LOADING...", subtitle: "GAME CENTERから取得中")
                 } else {
                     let b = boards()
                     let list = tab == .total ? b.total : b.best
                     VStack(spacing: 4) {
                         ForEach(list, id: \.id) { entry in
-                            rowButton(entry: entry, value: tab == .total ? entry.total : entry.best)
+                            rowButton(entry: entry, value: (tab == .total ? entry.total : entry.best) ?? 0)
                         }
                     }
                 }
@@ -140,9 +153,68 @@ struct LeaderboardView: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 24)
         }
+        .task(id: appState.gameCenter.isAuthenticated) {
+            appState.gameCenter.refreshLeaderboards()
+        }
         .sheet(item: $open) { entry in
             detailModal(for: entry)
         }
+    }
+
+    // MARK: - Game Center 実データ
+
+    /// 認証済みかつ取得済みなら現在のタブに対応する実ランキングを返す。nil = ローカル(CPU)フォールバック表示。
+    private var remoteEntries: [Entry]? {
+        guard appState.gameCenter.isAuthenticated else { return nil }
+        switch tab {
+        case .total:
+            return appState.gameCenter.remoteTotal.map { $0.map { entry(fromRemote: $0, isTotalBoard: true) } }
+        case .best:
+            return appState.gameCenter.remoteBest.map { $0.map { entry(fromRemote: $0, isTotalBoard: false) } }
+        case .history:
+            return nil
+        }
+    }
+
+    private func entry(fromRemote r: RemoteLeaderboardEntry, isTotalBoard: Bool) -> Entry {
+        // context に統計がパックされていれば復元（context=0 の旧スコアは nil → 「—」表示）
+        let ctx = ScoreContext(decoding: r.context)
+        let name = r.isLocalPlayer && !appState.settings.name.isEmpty ? appState.settings.name : r.name
+        return Entry(
+            rank: r.rank,
+            name: name,
+            best: isTotalBoard ? nil : r.score,
+            total: isTotalBoard ? r.score : nil,
+            games: r.isLocalPlayer ? appState.totalGames : nil,
+            wpm: ctx?.wpm,
+            acc: ctx?.acc,
+            combo: ctx?.combo,
+            words: ctx?.words,
+            time: ctx?.time,
+            date: Self.dateFormatter.string(from: r.date),
+            course: ctx.map { "\($0.time)s" } ?? "—",
+            isYou: r.isLocalPlayer
+        )
+    }
+
+    private func emptyBox(title: String, subtitle: String) -> some View {
+        VStack(spacing: 6) {
+            Text(title)
+                .font(AppFont.pixel(11))
+                .kerning(2)
+                .foregroundStyle(theme.textDim)
+            Text(subtitle)
+                .font(AppFont.kana(10))
+                .kerning(2)
+                .foregroundStyle(theme.textDim)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 32)
+        .overlay(Rectangle().stroke(style: .init(lineWidth: 1, dash: [4, 3])).foregroundStyle(theme.textDim))
+    }
+
+    private func fmt(_ value: Int?) -> String {
+        value.map(String.init) ?? "—"
     }
 
     private var tabSwitcher: some View {
@@ -154,9 +226,10 @@ struct LeaderboardView: View {
     }
 
     private var tabDescription: String {
+        let isRemote = remoteEntries != nil
         switch tab {
-        case .total: return "累計スコア = ALL GAMES SUMMED"
-        case .best: return "ベストスコア = SINGLE BEST RUN"
+        case .total: return isRemote ? "累計スコア = GAME CENTER RANKING" : "累計スコア = ALL GAMES SUMMED"
+        case .best: return isRemote ? "ベストスコア = GAME CENTER RANKING" : "ベストスコア = SINGLE BEST RUN"
         case .history: return "プレイ履歴 = RECENT GAMES"
         }
     }
@@ -165,19 +238,7 @@ struct LeaderboardView: View {
     private var historyList: some View {
         let history = appState.history
         if history.isEmpty {
-            VStack(spacing: 6) {
-                Text("NO GAMES YET")
-                    .font(AppFont.pixel(11))
-                    .kerning(2)
-                    .foregroundStyle(theme.textDim)
-                Text("まだプレイ履歴がありません")
-                    .font(AppFont.kana(10))
-                    .kerning(2)
-                    .foregroundStyle(theme.textDim)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 32)
-            .overlay(Rectangle().stroke(style: .init(lineWidth: 1, dash: [4, 3])).foregroundStyle(theme.textDim))
+            emptyBox(title: "NO GAMES YET", subtitle: "まだプレイ履歴がありません")
         } else {
             VStack(spacing: 4) {
                 ForEach(Array(history.enumerated()), id: \.element.id) { (i, h) in
@@ -278,7 +339,9 @@ struct LeaderboardView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                Text(tab == .total ? "×\(entry.games)" : "\(entry.wpm)wpm")
+                Text(tab == .total
+                    ? entry.games.map { "×\($0)" } ?? "—"
+                    : entry.wpm.map { "\($0)wpm" } ?? "—")
                     .font(AppFont.pixel(8))
                     .foregroundStyle(theme.secondary)
                     .padding(.trailing, 10)
@@ -304,15 +367,15 @@ struct LeaderboardView: View {
                     .kerning(2)
                     .foregroundStyle(theme.accent)
                 HStack(spacing: 12) {
-                    StatBlock(theme: theme, label: "★ TOTAL", value: "\(entry.total)")
-                    StatBlock(theme: theme, label: "♕ BEST", value: "\(entry.best)")
-                    StatBlock(theme: theme, label: "GAMES", value: "\(entry.games)")
+                    StatBlock(theme: theme, label: "★ TOTAL", value: fmt(entry.total))
+                    StatBlock(theme: theme, label: "♕ BEST", value: fmt(entry.best))
+                    StatBlock(theme: theme, label: "GAMES", value: fmt(entry.games))
                 }
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)], spacing: 8) {
-                    StatBlock(theme: theme, label: "WPM", value: "\(entry.wpm)")
-                    StatBlock(theme: theme, label: "ACC", value: "\(entry.acc)%")
-                    StatBlock(theme: theme, label: "COMBO", value: "\(entry.combo)")
-                    StatBlock(theme: theme, label: "WORDS", value: "\(entry.words)")
+                    StatBlock(theme: theme, label: "WPM", value: fmt(entry.wpm))
+                    StatBlock(theme: theme, label: "ACC", value: entry.acc.map { "\($0)%" } ?? "—")
+                    StatBlock(theme: theme, label: "COMBO", value: fmt(entry.combo))
+                    StatBlock(theme: theme, label: "WORDS", value: fmt(entry.words))
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     Text("COURSE: \(entry.course)")

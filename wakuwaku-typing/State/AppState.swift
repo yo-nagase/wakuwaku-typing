@@ -79,7 +79,15 @@ final class AppState {
         save()
 
         // Game Center には単発スコアと累積スコアを送信。GC 側で自動的に最高値が保持される。
-        gameCenter.submitScore(score, duration: result.time)
+        // context にラウンド統計をパックし、リーダーボード表示時に他プレイヤーの WPM 等も復元できるようにする。
+        let context = ScoreContext(
+            wpm: result.wpm,
+            acc: result.acc,
+            combo: result.combo,
+            words: result.words,
+            time: result.time
+        ).encoded
+        gameCenter.submitScore(score, duration: result.time, context: context)
         gameCenter.submitCumulativeScore(cumulativeScore)
     }
 

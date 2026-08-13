@@ -42,14 +42,13 @@ nonisolated enum WordPacks {
         isLocked: true
     )
 
-    static let comingSoonShortText = WordPack(
+    static let shortText = WordPack(
         id: "shorttext",
         jp: "たんぶん",
         en: "SHORT TEXT",
-        sample: "─",
-        desc: "Coming soon.",
-        entries: [],
-        isLocked: true
+        sample: "きょうはいいてんき・おはよう",
+        desc: "Everyday short sentences in hiragana.",
+        entries: ShortTextData.entries
     )
 
     static let comingSoonKatakana = WordPack(
@@ -66,8 +65,8 @@ nonisolated enum WordPacks {
     /// Order matters: active modes first, locked modes after.
     static let all: [WordPack] = [
         kotowaza,
+        shortText,
         comingSoonVocab,
-        comingSoonShortText,
         comingSoonKatakana,
     ]
 
